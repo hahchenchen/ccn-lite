@@ -28,6 +28,14 @@
 #endif
 
 // ----------------------------------------------------------------------
+extern int rcvTimeOut;
+extern int fdSerial;
+extern int iSetOpt;
+int openPort(int fd, int comport);
+int setOpt(int fd, int nSpeed, int nBits, char nEvent, int nStop);
+int readDataTty(int fd, char *rcv_buf, int TimeOut, int Len);
+int sendDataTty(int fd, char *send_buf, int Len);
+
 
 // ccnl-core.c
 

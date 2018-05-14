@@ -35,6 +35,19 @@
 
 #include "ccnl-common.c"
 
+#include <stdio.h>  
+#include <sys/types.h>  
+#include <sys/socket.h>  
+#include <string.h>  
+#include <stdlib.h>  
+#include <sys/un.h>  
+#include <unistd.h>
+
+int sockfd,ret,send_num,send_num_total=0;  
+
+int socket_index=0;  
+struct sockaddr_un server_addr;  
+
 // ----------------------------------------------------------------------
 
 void
@@ -1234,13 +1247,13 @@ ndn_type2name(unsigned type)
 
 static int
 ndn_parse_sequence(int lev, unsigned char *base, unsigned char **buf,
-               int *len, char *cur_tag, int rawxml, FILE* out)
+               int *len, char *cur_tag, int rawxml, FILE* out, char* socket_buf)
 {
     int i, maxi, vallen;
     int typ;
     unsigned char *cp;
     char *n, tmp[100];
-
+    
     while (*len > 0) {
         cp = *buf;
         if (ccnl_ndntlv_dehead(buf, (int*) len, &typ, &vallen) < 0)
@@ -1277,7 +1290,7 @@ ndn_parse_sequence(int lev, unsigned char *base, unsigned char **buf,
 
         if (typ < NDN_TLV_MAX_TYPE && ndntlv_recurse[typ]) {
             *len -= vallen;
-            if (ndn_parse_sequence(lev+1, base, buf, &vallen, n, rawxml, out) < 0) {
+            if (ndn_parse_sequence(lev+1, base, buf, &vallen, n, rawxml, out,socket_buf) < 0) {
                 return -1;
             }
             if (rawxml) {
@@ -1303,8 +1316,10 @@ ndn_parse_sequence(int lev, unsigned char *base, unsigned char **buf,
                 for (i = 0; i < lev+1; i++)
                     fprintf(out, "  ");
                 for (i = 0; i < 8; i++, cp++){
-                        if (i < maxi)
+                        if (i < maxi){
                                 fprintf(out, "%02x ", *cp);
+                                socket_buf[socket_index++]=*cp;
+                            }
                         else
                                 fprintf(out, "   ");
                 }
@@ -1326,16 +1341,30 @@ ndn_parse_sequence(int lev, unsigned char *base, unsigned char **buf,
             fprintf(out, "</%s>\n", n);
         }
     }
+   socket_buf[socket_index]=0;
+    
     return 0;
 }
 
 static void
 ndntlv_201311(unsigned char *data, int len, int rawxml, FILE* out)
 {
-    unsigned char *buf = data;
+    unsigned char *buf = data; 
+    
+    char* socket_buf=(char*)malloc(sizeof(char)*1000);
 
     // dump the sequence of TLV fields, should start with a name TLV
-    ndn_parse_sequence(0, data, &buf, &len, "payload", rawxml, out);
+    ndn_parse_sequence(0, data, &buf, &len, "payload", rawxml, out, socket_buf);
+    /*
+    send_num=send(sockfd,socket_buf,strlen(socket_buf),MSG_DONTWAIT);  
+        if (send_num<0)  
+            printf("调用send函数失败！");  
+        else  
+        {  
+            send_num_total+=send_num;  
+            printf("调用send函数成功，本次发送%d个字节，内容为：\"%s\"。目前共发送了%d个字节的数据。\n",send_num,socket_buf,send_num_total);  
+        } 
+    */
     if (!rawxml) {
         fprintf(out, "%04zx  pkt.end\n", buf - data);
     }
@@ -1724,6 +1753,25 @@ help:
         len += rc;
         maxlen -= rc;
     }
+/*
+memset(&server_addr,0,sizeof(server_addr));  
+    server_addr.sun_family=AF_UNIX;  
+    strcpy(server_addr.sun_path,"/home/c/server.socket");  
+    sockfd=socket(AF_UNIX,SOCK_STREAM,0);  
+    if (sockfd<0)  
+    {  
+        printf("调用socket函数建立socket描述符出错！\n");  
+        exit(1);  
+    }  
+    printf("调用socket函数建立socket描述符成功！\n");  
+    ret=connect(sockfd,(struct sockaddr *)(&server_addr),sizeof(server_addr));  
+    if (ret<0)  
+    {  
+        printf("调用connect函数失败，客户端连接服务器失败!\n ");  
+        exit(2);  
+    }  
+    printf("调用connect函数成功，客户端连接服务器成功！\n");  
+*/
 
     if (format == 0)
         printf("# ccn-lite-pktdump, parsing %d byte%s\n", len, len!=1 ? "s":"");

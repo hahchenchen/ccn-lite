@@ -87,6 +87,24 @@
 #include "ccnl-ext-frag.c"
 #include "ccnl-ext-crypto.c"
 
+/********uart**************/
+#include <stdio.h>  
+#include <string.h>  
+#include <stdlib.h>  
+  
+#include <fcntl.h>  
+#include <unistd.h>  
+  
+#include <termios.h> //set baud rate  
+  
+#include <sys/select.h>  
+#include <sys/time.h>  
+#include <sys/types.h>  
+#include <errno.h>  
+#include <sys/stat.h>  
+
+
+
 // ----------------------------------------------------------------------
 
 struct ccnl_relay_s theRelay;
@@ -663,7 +681,30 @@ ccnl_io_loop(struct ccnl_relay_s *ccnl)
 #ifdef USE_HTTP_STATUS
         ccnl_http_postselect(ccnl, ccnl->http, &readfs, &writefs);
 #endif
+
+        sockunion temp;
+        temp.sa.sa_family=AF_INET;
+        temp.ip4.sin_port=0xf27;
+        temp.ip4.sin_addr.s_addr=0xa00a8c0;
+
+        char buf_uart[1024]={0};
+        int uart_len=0;
+
+// char temp_buf[45]={0x06,0x2b,0x07,0x16,0x08,0x03,0x6e,0x64,0x6e,0x08,0x04,0x74,0x65,0x73,0x74,0x08,0x09,0x6d,
+  //                       0x79,0x63,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x14,0x00,0x15,0x06,0x68,0x65,0x6c,0x6c,0x6f,0x0a,0x16,0x05,0x1b,0x01,0x00,0x1c,0x00,0x17,0x00};
+
         for (i = 0; i < ccnl->ifcount; i++) {
+            uart_len=readDataTty(fdSerial, (char *)buf_uart, rcvTimeOut, sizeof(buf_uart));
+            if(uart_len>0)
+            {
+                DEBUGMSG(INFO, "uart read success!\n");
+              
+                ccnl_core_RX(ccnl, i,(unsigned char *)buf_uart,
+                             uart_len, &temp.sa, sizeof(temp.ip4));
+                uart_len=0;
+                memset(buf_uart,0,sizeof(buf_uart));
+            }
+
             if (FD_ISSET(ccnl->ifs[i].sock, &readfs)) {
                 sockunion src_addr;
                 socklen_t addrlen = sizeof(sockunion);
@@ -908,6 +949,28 @@ main(int argc, char **argv)
     time(&theRelay.startup_time);
     unsigned int seed = time(NULL) * getpid();
     srandom(seed);
+
+
+    /***uart***/ 
+    fdSerial=0; 
+    if ((fdSerial = openPort(fdSerial, 4))<0)//1--"/dev/ttyS0",2--"/dev/ttyS1",3--"/dev/ttyS2",4--"/dev/ttyUSB0" 小电脑上是2--"/dev/ttyS1"  
+    {  
+        perror("open_port error");  
+        return -1;  
+    }  
+
+    if ((iSetOpt = setOpt(fdSerial, 115200, 8, 'N', 1))<0)  
+    {  
+        perror("set_opt error");  
+        return -1;  
+    }  
+    printf("Serial fdSerial=%d\n", fdSerial);  
+  
+    tcflush(fdSerial, TCIOFLUSH);//清掉串口缓存  
+    fcntl(fdSerial, F_SETFL, 0);  
+
+    /***uart end***/ 
+
 
     while ((opt = getopt(argc, argv, "hc:d:e:g:i:o:p:s:t:u:6:v:w:x:")) != -1) {
         switch (opt) {

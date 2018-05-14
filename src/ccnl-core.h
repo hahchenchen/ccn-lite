@@ -55,6 +55,7 @@
 /* TODO: remove when af_ieee802154.h is in linux mainline */
 #define IEEE802154_ADDR_LEN 8
 
+
 typedef enum {
     IEEE802154_ADDR_NONE = 0x0,
     IEEE802154_ADDR_SHORT = 0x2,
